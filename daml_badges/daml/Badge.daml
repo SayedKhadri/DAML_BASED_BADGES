@@ -1,0 +1,133 @@
+module Badge where
+
+import Daml.Script
+import DA.Date (date, toDateUTC)
+import DA.Time (time)
+import DA.Date.Types (Month(Nov))
+import qualified DA.Text as T
+
+type MetaBadgeKey = (Party, Text, Text)
+
+type BadgeKey = (Party, [Party], Text)
+
+template Badge
+    with
+        sender : Party
+        receiver : [Party]
+        notified : [Party]
+        issuedOn : Time
+        congratsText : Text
+        project : Text
+        link : Text
+        metaBadgeId : Text
+    where
+        signatory sender
+        observer receiver, notified
+
+        key (sender, receiver, metaBadgeId) : BadgeKey
+        maintainer key._1
+
+
+template MetaBadge
+    with
+        id : Text
+        admin : Party
+        badgeUsers : [Party]
+        image : Text
+        title : Text
+        group : Text
+        description : Text
+    where
+        signatory admin
+        observer badgeUsers
+
+        key (admin, id, title) : MetaBadgeKey
+        maintainer key._1
+
+        nonconsuming choice Give : ContractId Badge
+            with
+                sender : Party
+                receiver : [Party]
+                notified : [Party]
+                congratsText : Text
+                project : Text
+                link : Text
+            controller sender
+                do
+                    currentTime <- getTime
+                    create Badge with issuedOn = currentTime; metaBadgeId = id; ..
+
+
+
+allocateParty_ alias = do
+    party <- allocatePartyWithHint alias (PartyIdHint alias)
+    partyId <- validateUserId $ toUserId alias
+    createUser (User partyId (Some party)) [CanActAs party]
+
+    return party
+
+-- | Convert a text to a valid user id.
+toUserId : Text -> Text
+toUserId = T.asciiToLower
+
+test_badge : Script ()
+test_badge = do
+    -- setTime (time (date 2022 Nov 16) 11 11 0)
+
+    admin <- allocateParty_ "Admin"
+    alice <- allocateParty_ "Alice"
+    bob <- allocateParty_ "Bob"
+    dave <- allocateParty_ "Dave"
+    sayed <- allocateParty_ "Sayed"
+
+    admin `submit` do
+        createCmd MetaBadge with 
+            id = "TB001" 
+            admin
+            badgeUsers = [alice, bob, dave, sayed]
+            title = "THANK YOU!"
+            image = "path/to/image"
+            group = "general_thank_you"
+            description = "badge given to user for appreciation"
+
+    admin `submit` do
+            createCmd MetaBadge with 
+                id = "TB002" 
+                admin
+                badgeUsers = [alice, bob, dave, sayed]
+                title = "HIGH GIVE"
+                image = "path/to/image"
+                group = "general_thank_you"
+                description = "You alway find a way to it done and done well!"
+    
+    admin `submit` do
+            createCmd MetaBadge with 
+                id = "TB003" 
+                admin
+                badgeUsers = [alice, bob, dave, sayed]
+                title = "POSTIVE VIBE"
+                image = "path/to/image"
+                group = "general_thank_you"
+                description = "Keep up the positive vibe!"    
+
+     
+    -- [t, _t1, _t2] <- query @MetaBadge admin
+
+    -- debug t
+    -- debug _t1
+    -- debug _t2
+
+    -- alice `submit` do
+    --     exerciseCmd t._1 Give with
+    --         sender = alice
+    --         receiver = [bob]
+    --         notified = []
+    --         congratsText = "Thank you for your great work Bob!"
+    --         project = "EPM-NRT"
+    --         link = ""
+
+
+
+    pure ()
+
+
